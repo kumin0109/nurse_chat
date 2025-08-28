@@ -206,6 +206,8 @@ if "last_problem" not in st.session_state:
     st.session_state.last_problem = None
 if "prev_category" not in st.session_state:
     st.session_state.prev_category = None  # UI 전환용
+if "user_answer" not in st.session_state:
+    st.session_state.user_answer = ""      # ✨ 입력 유지/초기화용
 
 # 카테고리 선택 (전체 + 허용 시트 두 개)
 allowed = ["전체"] + _allowed_categories(list(sheet_names))
@@ -217,12 +219,13 @@ except Exception:
     category = st.radio("문제를 풀 카테고리", options=allowed, index=0, help="시트를 선택하세요.")
 st.session_state.category = category
 
-# 카테고리가 바뀌면 상태 초기화 (버튼 라벨 '새 문제'로 리셋)
+# 카테고리가 바뀌면 상태 초기화 (버튼 라벨 '새 문제'로 리셋 + 입력창 비움)
 if st.session_state.prev_category != category:
     st.session_state.prev_category = category
     st.session_state.problem_id = None
     st.session_state.last_problem = None
     st.session_state.last_feedback = ""
+    st.session_state.user_answer = ""      # ✨ 비우기
 
 col_a, col_b = st.columns(2)
 
@@ -238,6 +241,7 @@ with col_a:
             st.session_state.problem_id = prob["id"]
             st.session_state.last_problem = prob
             st.session_state.last_feedback = ""
+            st.session_state.user_answer = ""  # ✨ 다음 문제 받을 때 입력창 비우기
 
 with col_b:
     if st.button("🔄 카테고리 초기화", use_container_width=True):
@@ -246,6 +250,7 @@ with col_b:
         st.session_state.problem_id = None
         st.session_state.last_problem = None
         st.session_state.last_feedback = ""
+        st.session_state.user_answer = ""      # ✨ 비우기
 
 # 현재 문제 표시 (텔레그램 메시지 포맷 유지)
 st.divider()
@@ -263,7 +268,8 @@ st.subheader("나의 답변")
 user_answer = st.text_area(
     "여기에 답변을 입력하세요",
     height=160,
-    placeholder="예) 불편을 드려 죄송합니다. 시설팀 점검을 요청하고, 예상 소요시간을 안내드리겠습니다..."
+    placeholder="예) 불편을 드려 죄송합니다. 시설팀 점검을 요청하고, 예상 소요시간을 안내드리겠습니다...",
+    key="user_answer"  # ✨ 세션 상태로 관리
 )
 
 # 채점 (유사도 → GPT 평가, 텔레그램과 동일 로직)
@@ -293,6 +299,7 @@ if st.session_state.last_feedback:
 with st.expander("🔎 디버그(옵션)"):
     st.write("현재 카테고리:", st.session_state.category)
     st.write("현재 문제 ID:", st.session_state.problem_id)
+    st.write("현재 입력값:", st.session_state.user_answer)  # 확인용
     if st.session_state.last_problem:
         st.json({
             "sheet": st.session_state.last_problem["sheet"],
