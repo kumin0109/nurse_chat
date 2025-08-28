@@ -12,42 +12,11 @@ from openai import OpenAI
 
 # ==================== 환경 변수 및 OpenAI 초기화 ====================
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
-EXCEL_PATH = os.getenv("EXCEL_PATH", "")  # 비워두면 자동탐색
+EXCEL_PATH = os.getenv("EXCEL_PATH", "")  # 비워두면 자동탐색 (현재는 미사용)
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ==================== 전역 설정 ====================
 TARGET_SHEETS = ["병동분만실", "병동별 고객 응대"]  # 허용 카테고리(시트)
-
-# ==================== 유틸: 엑셀 경로 자동탐색 ====================
-def resolve_excel_path() -> str:
-    """
-    /opt 아래에서 .xlsx를 자동으로 찾아 경로를 반환.
-    환경변수 EXCEL_PATH 가 유효하면 최우선 사용.
-    """
-    candidates = [
-        EXCEL_PATH,
-        "/opt/data/nursing_data.xlsx",
-        "/opt/data/data/nursing_data.xlsx",
-        "/opt/python/data/nursing_data.xlsx",
-        "/opt/nursing_data.xlsx",
-    ]
-    try:
-        for root, _, files in os.walk("/opt"):
-            for f in files:
-                if f.lower().endswith(".xlsx"):
-                    candidates.append(os.path.join(root, f))
-    except Exception:
-        pass
-
-    tried = []
-    for path in [c for c in candidates if c]:
-        if path in tried:
-            continue
-        tried.append(path)
-        if os.path.exists(path):
-            print(f"[resolve_excel_path] Using: {path}")
-            return path
-    raise FileNotFoundError("No .xlsx found. Tried: " + ", ".join(tried[:10]))
 
 # ==================== 임베딩 캐시 ====================
 def _emb_cache_path() -> str:
@@ -235,6 +204,8 @@ if "last_feedback" not in st.session_state:
     st.session_state.last_feedback = ""
 if "last_problem" not in st.session_state:
     st.session_state.last_problem = None
+if "prev_category" not in st.session_state:
+    st.session_state.prev_category = None  # UI 전환용
 
 # 카테고리 선택 (전체 + 허용 시트 두 개)
 allowed = ["전체"] + _allowed_categories(list(sheet_names))
@@ -246,9 +217,20 @@ except Exception:
     category = st.radio("문제를 풀 카테고리", options=allowed, index=0, help="시트를 선택하세요.")
 st.session_state.category = category
 
+# 카테고리가 바뀌면 상태 초기화 (버튼 라벨 '새 문제'로 리셋)
+if st.session_state.prev_category != category:
+    st.session_state.prev_category = category
+    st.session_state.problem_id = None
+    st.session_state.last_problem = None
+    st.session_state.last_feedback = ""
+
 col_a, col_b = st.columns(2)
+
+# ⬇️ 처음엔 '🎲 새 문제 받기', 이후엔 '➡️ 다음 문제'로 자동 전환
+main_btn_label = "🎲 새 문제 받기" if st.session_state.last_problem is None else "➡️ 다음 문제"
+
 with col_a:
-    if st.button("🎲 새 문제 받기", use_container_width=True):
+    if st.button(main_btn_label, use_container_width=True):
         prob = get_random_problem(all_problems, st.session_state.category)
         if not prob:
             st.warning("⚠️ 해당 카테고리에서 문제를 찾을 수 없습니다.")
@@ -260,6 +242,7 @@ with col_a:
 with col_b:
     if st.button("🔄 카테고리 초기화", use_container_width=True):
         st.session_state.category = allowed[0]
+        st.session_state.prev_category = allowed[0]
         st.session_state.problem_id = None
         st.session_state.last_problem = None
         st.session_state.last_feedback = ""
@@ -316,5 +299,4 @@ with st.expander("🔎 디버그(옵션)"):
             "situation": st.session_state.last_problem["situation"],
             "question": st.session_state.last_problem["question"],
         })
-
 
