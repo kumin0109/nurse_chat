@@ -1,4 +1,4 @@
-  import os
+import os
 import json
 import hashlib
 import random
@@ -316,3 +316,4 @@ with st.expander("🔎 디버그(옵션)"):
             "situation": st.session_state.last_problem["situation"],
             "question": st.session_state.last_problem["question"],
         })
+
