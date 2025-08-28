@@ -116,7 +116,7 @@ def load_quiz_data() -> Tuple[Dict[str, pd.DataFrame], List[str], List[Dict[str,
     - 질문: ["질문", "질의", "문제"]
     - 모범답안: ["모범답안", "모범답변", "표준답변"]
     """
-    REAL_EXCEL = resolve_excel_path()
+    REAL_EXCEL = "nursing_data.xlsx"   # 같은 폴더에 있는 파일 고정
     xls = pd.ExcelFile(REAL_EXCEL, engine="openpyxl")
     data_dict: Dict[str, pd.DataFrame] = {}
 
@@ -316,4 +316,5 @@ with st.expander("🔎 디버그(옵션)"):
             "situation": st.session_state.last_problem["situation"],
             "question": st.session_state.last_problem["question"],
         })
+
 
