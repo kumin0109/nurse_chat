@@ -197,7 +197,7 @@ if "last_problem" not in st.session_state:
 if "user_answer" not in st.session_state:
     st.session_state["user_answer"] = ""
 
-# 카테고리 선택: 전체, 병동분만실
+# ---------------- 카테고리 선택 ----------------
 allowed = ["전체", "병동분만실"]
 st.subheader("카테고리 선택")
 try:
@@ -206,19 +206,30 @@ except Exception:
     category = st.radio("문제를 풀 카테고리", options=allowed, index=0)
 st.session_state.category = category
 
-# 문제 표시
+# ▶️ 시작하기 버튼 (카테고리 선택 밑)
+if st.session_state.last_problem is None:
+    if st.button("▶️ 시작하기", use_container_width=True):
+        prob = get_random_problem(all_problems, st.session_state.category)
+        if prob:
+            st.session_state.problem_id = prob["id"]
+            st.session_state.last_problem = prob
+            st.session_state.last_feedback = ""
+            st.session_state.update({"user_answer": ""})
+            st.rerun()
+
+# ---------------- 문제 표시 ----------------
 st.divider()
 st.subheader("문제")
 if st.session_state.last_problem:
     p = st.session_state.last_problem
     st.markdown(f"**📍 부서:** {p['sheet']}")
-    st.markdown(f"**📑 평가항목:** {p['sheet']}")  # sheet명을 평가항목으로 표기
+    st.markdown(f"**📑 평가항목:** {p['sheet']}")
     st.markdown(f"**📋 상황:** {p['situation'] or '-'}")
     st.markdown(f"**❓ 질문:** {p['question'] or '-'}")
 else:
     st.info("먼저 **‘▶️ 시작하기’** 버튼을 눌러 시작하세요.")
 
-# 답안 입력
+# ---------------- 답안 입력 ----------------
 st.subheader("나의 답변")
 user_answer = st.text_area(
     "여기에 답변을 입력하세요",
@@ -227,7 +238,7 @@ user_answer = st.text_area(
     key="user_answer"
 )
 
-# 채점하기
+# ---------------- 채점하기 ----------------
 if st.button("✅ 채점하기", type="primary"):
     if not st.session_state.last_problem:
         st.warning("먼저 문제를 받아주세요.")
@@ -245,28 +256,28 @@ if st.button("✅ 채점하기", type="primary"):
         except Exception as e:
             st.error(f"채점 오류: {type(e).__name__}: {str(e)[:200]}")
 
-# 결과 표시
+# ---------------- 결과 표시 ----------------
 if st.session_state.last_feedback:
     st.subheader("📊 채점 결과")
     st.markdown(st.session_state.last_feedback)
 
-# 추가 버튼들
-col1, col2 = st.columns(2)
-with col1:
-    main_btn_label = "▶️ 시작하기" if st.session_state.last_problem is None else "➡️ 다음 문제"
-    if st.button(main_btn_label, use_container_width=True):
-        prob = get_random_problem(all_problems, st.session_state.category)
-        if prob:
-            st.session_state.problem_id = prob["id"]
-            st.session_state.last_problem = prob
+# ---------------- 다음 문제 / 카테고리 변경 ----------------
+if st.session_state.last_problem:   # 문제를 시작한 이후에만 표시
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("➡️ 다음 문제", use_container_width=True):
+            prob = get_random_problem(all_problems, st.session_state.category)
+            if prob:
+                st.session_state.problem_id = prob["id"]
+                st.session_state.last_problem = prob
+                st.session_state.last_feedback = ""
+                st.session_state.update({"user_answer": ""})
+                st.rerun()
+    with col2:
+        if st.button("🔄 카테고리 변경", use_container_width=True):
+            st.session_state.category = "전체"
+            st.session_state.problem_id = None
+            st.session_state.last_problem = None
             st.session_state.last_feedback = ""
             st.session_state.update({"user_answer": ""})
             st.rerun()
-with col2:
-    if st.button("🔄 카테고리 변경", use_container_width=True):
-        st.session_state.category = "전체"
-        st.session_state.problem_id = None
-        st.session_state.last_problem = None
-        st.session_state.last_feedback = ""
-        st.session_state.update({"user_answer": ""})
-        st.rerun()
