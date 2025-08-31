@@ -194,8 +194,6 @@ if "last_feedback" not in st.session_state:
     st.session_state.last_feedback = ""
 if "last_problem" not in st.session_state:
     st.session_state.last_problem = None
-if "user_answer" not in st.session_state:
-    st.session_state["user_answer"] = ""
 
 # ---------------- 카테고리 선택 ----------------
 allowed = ["전체", "병동분만실"]
@@ -214,7 +212,6 @@ if st.session_state.last_problem is None:
             st.session_state.problem_id = prob["id"]
             st.session_state.last_problem = prob
             st.session_state.last_feedback = ""
-            st.session_state.update({"user_answer": ""})
             st.rerun()
 
 # ---------------- 문제 표시 ----------------
@@ -231,11 +228,13 @@ else:
 
 # ---------------- 답안 입력 ----------------
 st.subheader("나의 답변")
+current_pid = st.session_state.last_problem["id"] if st.session_state.last_problem else "none"
+
 user_answer = st.text_area(
     "여기에 답변을 입력하세요",
     height=160,
     placeholder="예) 불편을 드려 죄송합니다. 시설팀 점검을 요청하고, 예상 소요시간을 안내드리겠습니다...",
-    key="user_answer"
+    key=f"user_answer_{current_pid}"   # ✅ 문제 ID 기반으로 key 변경
 )
 
 # ---------------- 채점하기 ----------------
@@ -271,7 +270,6 @@ if st.session_state.last_problem:   # 문제를 시작한 이후에만 표시
                 st.session_state.problem_id = prob["id"]
                 st.session_state.last_problem = prob
                 st.session_state.last_feedback = ""
-                st.session_state.update({"user_answer": ""})
                 st.rerun()
     with col2:
         if st.button("🔄 카테고리 변경", use_container_width=True):
@@ -279,5 +277,5 @@ if st.session_state.last_problem:   # 문제를 시작한 이후에만 표시
             st.session_state.problem_id = None
             st.session_state.last_problem = None
             st.session_state.last_feedback = ""
-            st.session_state.update({"user_answer": ""})
             st.rerun()
+
