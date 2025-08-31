@@ -12,11 +12,11 @@ from openai import OpenAI
 
 # ==================== 환경 변수 및 OpenAI 초기화 ====================
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
-EXCEL_PATH = os.getenv("EXCEL_PATH", "")  # 비워두면 자동탐색 (현재는 미사용)
+EXCEL_PATH = os.getenv("EXCEL_PATH", "")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ==================== 전역 설정 ====================
-TARGET_SHEETS = ["병동분만실", "병동별 고객 응대"]  # 허용 카테고리(시트)
+TARGET_SHEETS = ["병동분만실", "병동별 고객 응대"]
 
 # ==================== 임베딩 캐시 ====================
 def _emb_cache_path() -> str:
@@ -69,7 +69,6 @@ def cos_sim(A: np.ndarray, B: np.ndarray) -> float:
 
 # ==================== 엑셀 데이터 로드 ====================
 def _pick(row: pd.Series, candidates: List[str], default: str = "") -> str:
-    """여러 후보 컬럼명 중 존재하고 값이 있는 첫 항목을 문자열로 반환"""
     for name in candidates:
         if name in row.index:
             val = row[name]
@@ -79,19 +78,13 @@ def _pick(row: pd.Series, candidates: List[str], default: str = "") -> str:
 
 @st.cache_data(show_spinner=True)
 def load_quiz_data() -> Tuple[Dict[str, pd.DataFrame], List[str], List[Dict[str, Any]]]:
-    """
-    텔레그램 버전과 동일한 컬럼 매핑 유지:
-    - 상황: ["상황", "상황 설명", "상황내용"]
-    - 질문: ["질문", "질의", "문제"]
-    - 모범답안: ["모범답안", "모범답변", "표준답변"]
-    """
-    REAL_EXCEL = "nursing_data.xlsx"   # 같은 폴더에 있는 파일 고정
+    REAL_EXCEL = "nursing_data.xlsx"
     xls = pd.ExcelFile(REAL_EXCEL, engine="openpyxl")
     data_dict: Dict[str, pd.DataFrame] = {}
 
     for sheet in xls.sheet_names:
         df = pd.read_excel(REAL_EXCEL, sheet_name=sheet, engine="openpyxl")
-        df.columns = [str(c).strip() for c in df.columns]  # 컬럼 공백 제거
+        df.columns = [str(c).strip() for c in df.columns]
         data_dict[sheet] = df
 
     all_problems: List[Dict[str, Any]] = []
@@ -117,16 +110,13 @@ def _ensure_problem_embedding(problem: Dict[str, Any]) -> List[float]:
     return problem["embedding"]
 
 # ==================== 문제 추출 ====================
-def _allowed_categories(sheet_names: List[str]) -> List[str]:
-    filtered = [s for s in sheet_names if s in TARGET_SHEETS]
-    return filtered if filtered else list(sheet_names)
-
 def get_random_problem(all_problems: List[Dict[str, Any]], category: str | None = None) -> Dict[str, Any] | None:
     try:
-        if category and category != "전체":
-            filtered = [p for p in all_problems if p["sheet"] == category]
-            return random.choice(filtered) if filtered else None
-        return random.choice(all_problems) if all_problems else None
+        if category == "병동분만실":
+            filtered = [p for p in all_problems if p["sheet"] == "병동분만실"]
+        else:  # 전체
+            filtered = [p for p in all_problems if p["sheet"] in TARGET_SHEETS]
+        return random.choice(filtered) if filtered else None
     except Exception:
         return None
 
@@ -197,71 +187,36 @@ except Exception as e:
 
 # 세션 상태 초기화
 if "category" not in st.session_state:
-    st.session_state.category = None
+    st.session_state.category = "전체"
 if "problem_id" not in st.session_state:
     st.session_state.problem_id = None
 if "last_feedback" not in st.session_state:
     st.session_state.last_feedback = ""
 if "last_problem" not in st.session_state:
     st.session_state.last_problem = None
-if "prev_category" not in st.session_state:
-    st.session_state.prev_category = None  # UI 전환용
 if "user_answer" not in st.session_state:
-    st.session_state.user_answer = ""      # ✨ 입력 유지/초기화용
+    st.session_state.user_answer = ""
 
-# 카테고리 선택 (전체 + 허용 시트 두 개)
-allowed = ["전체"] + _allowed_categories(list(sheet_names))
+# 카테고리 선택: 전체, 병동분만실
+allowed = ["전체", "병동분만실"]
 st.subheader("카테고리 선택")
-# Streamlit 1.33+ segmented_control, 그 이하 버전이면 radio로 교체 가능
 try:
-    category = st.segmented_control("문제를 풀 카테고리", options=allowed, default=allowed[0], help="시트를 선택하세요.")
+    category = st.segmented_control("문제를 풀 카테고리", options=allowed, default=allowed[0])
 except Exception:
-    category = st.radio("문제를 풀 카테고리", options=allowed, index=0, help="시트를 선택하세요.")
+    category = st.radio("문제를 풀 카테고리", options=allowed, index=0)
 st.session_state.category = category
 
-# 카테고리가 바뀌면 상태 초기화 (버튼 라벨 '새 문제'로 리셋 + 입력창 비움)
-if st.session_state.prev_category != category:
-    st.session_state.prev_category = category
-    st.session_state.problem_id = None
-    st.session_state.last_problem = None
-    st.session_state.last_feedback = ""
-    st.session_state.user_answer = ""      # ✨ 비우기
-
-col_a, col_b = st.columns(2)
-
-# ⬇️ 처음엔 '🎲 새 문제 받기', 이후엔 '➡️ 다음 문제'로 자동 전환
-main_btn_label = "🎲 새 문제 받기" if st.session_state.last_problem is None else "➡️ 다음 문제"
-
-with col_a:
-    if st.button(main_btn_label, use_container_width=True):
-        prob = get_random_problem(all_problems, st.session_state.category)
-        if not prob:
-            st.warning("⚠️ 해당 카테고리에서 문제를 찾을 수 없습니다.")
-        else:
-            st.session_state.problem_id = prob["id"]
-            st.session_state.last_problem = prob
-            st.session_state.last_feedback = ""
-            st.session_state.user_answer = ""  # ✨ 다음 문제 받을 때 입력창 비우기
-
-with col_b:
-    if st.button("🔄 카테고리 초기화", use_container_width=True):
-        st.session_state.category = allowed[0]
-        st.session_state.prev_category = allowed[0]
-        st.session_state.problem_id = None
-        st.session_state.last_problem = None
-        st.session_state.last_feedback = ""
-        st.session_state.user_answer = ""      # ✨ 비우기
-
-# 현재 문제 표시 (텔레그램 메시지 포맷 유지)
+# 문제 표시
 st.divider()
 st.subheader("문제")
 if st.session_state.last_problem:
     p = st.session_state.last_problem
     st.markdown(f"**📍 부서:** {p['sheet']}")
+    st.markdown(f"**📑 평가항목:** {p['sheet']}")  # sheet명을 평가항목으로 표기
     st.markdown(f"**📋 상황:** {p['situation'] or '-'}")
     st.markdown(f"**❓ 질문:** {p['question'] or '-'}")
 else:
-    st.info("좌측 상단의 **‘🎲 새 문제 받기’**를 눌러 시작하세요.")
+    st.info("먼저 **‘➡️ 다음 문제’** 버튼을 눌러 시작하세요.")
 
 # 답안 입력
 st.subheader("나의 답변")
@@ -269,13 +224,13 @@ user_answer = st.text_area(
     "여기에 답변을 입력하세요",
     height=160,
     placeholder="예) 불편을 드려 죄송합니다. 시설팀 점검을 요청하고, 예상 소요시간을 안내드리겠습니다...",
-    key="user_answer"  # ✨ 세션 상태로 관리
+    key="user_answer"
 )
 
-# 채점 (유사도 → GPT 평가, 텔레그램과 동일 로직)
+# 채점하기
 if st.button("✅ 채점하기", type="primary"):
     if not st.session_state.last_problem:
-        st.warning("먼저 **‘🎲 새 문제 받기’**를 눌러 문제를 받아주세요.")
+        st.warning("먼저 문제를 받아주세요.")
     elif not user_answer.strip():
         st.warning("답변을 입력해 주세요.")
     else:
@@ -290,20 +245,26 @@ if st.button("✅ 채점하기", type="primary"):
         except Exception as e:
             st.error(f"채점 오류: {type(e).__name__}: {str(e)[:200]}")
 
-# 결과 표시 (텔레그램의 채점 답장 포맷 그대로)
+# 결과 표시
 if st.session_state.last_feedback:
     st.subheader("📊 채점 결과")
     st.markdown(st.session_state.last_feedback)
 
-# (옵션) 디버그
-with st.expander("🔎 디버그(옵션)"):
-    st.write("현재 카테고리:", st.session_state.category)
-    st.write("현재 문제 ID:", st.session_state.problem_id)
-    st.write("현재 입력값:", st.session_state.user_answer)  # 확인용
-    if st.session_state.last_problem:
-        st.json({
-            "sheet": st.session_state.last_problem["sheet"],
-            "situation": st.session_state.last_problem["situation"],
-            "question": st.session_state.last_problem["question"],
-        })
+# 추가 버튼들
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("➡️ 다음 문제", use_container_width=True):
+        prob = get_random_problem(all_problems, st.session_state.category)
+        if prob:
+            st.session_state.problem_id = prob["id"]
+            st.session_state.last_problem = prob
+            st.session_state.last_feedback = ""
+            st.session_state.user_answer = ""
+with col2:
+    if st.button("🔄 카테고리 변경", use_container_width=True):
+        st.session_state.category = "전체"
+        st.session_state.problem_id = None
+        st.session_state.last_problem = None
+        st.session_state.last_feedback = ""
+        st.session_state.user_answer = ""
 
