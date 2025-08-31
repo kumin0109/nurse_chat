@@ -94,12 +94,14 @@ def load_quiz_data() -> Tuple[Dict[str, pd.DataFrame], List[str], List[Dict[str,
             situation = _pick(row, ["상황", "상황 설명", "상황내용"], default="")
             question = _pick(row, ["질문", "질의", "문제"], default="")
             standard_answer = _pick(row, ["모범답안", "모범답변", "표준답변"], default="")
+            eval_item = _pick(row, ["평가항목", "평가 항목"], default="")   # ✅ 평가항목 추가
             all_problems.append({
                 "id": pid,
                 "sheet": sheet,
                 "situation": situation,
                 "question": question,
                 "standard_answer": standard_answer,
+                "eval_item": eval_item,   # ✅ 저장
                 "embedding": None,
             })
     return data_dict, xls.sheet_names, all_problems
@@ -218,7 +220,7 @@ st.subheader("문제")
 if st.session_state.last_problem:
     p = st.session_state.last_problem
     st.markdown(f"**📍 부서:** {p['sheet']}")
-    st.markdown(f"**📑 평가항목:** {p['sheet']}")
+    st.markdown(f"**📑 평가항목:** {p['eval_item'] or '-'}")   # ✅ 컬럼 값 표시
     st.markdown(f"**📋 상황:** {p['situation'] or '-'}")
     st.markdown(f"**❓ 질문:** {p['question'] or '-'}")
 else:
@@ -232,7 +234,7 @@ user_answer = st.text_area(
     "여기에 답변을 입력하세요",
     height=160,
     placeholder="예) 불편을 드려 죄송합니다. 시설팀 점검을 요청하고, 예상 소요시간을 안내드리겠습니다...",
-    key=f"user_answer_{current_pid}"   # 문제 ID 기반으로 key 변경
+    key=f"user_answer_{current_pid}"   # 문제 ID 기반 key
 )
 
 # ---------------- 채점하기 ----------------
@@ -276,4 +278,6 @@ if st.session_state.last_problem:   # 문제를 시작한 이후에만 표시
             st.session_state.last_problem = None
             st.session_state.last_feedback = ""
             st.rerun()
+
+
 
