@@ -175,12 +175,10 @@ def generate_evaluation(prompt: str) -> str:
 # ==================== Streamlit UI ====================
 st.set_page_config(page_title="간호사 교육 챗봇 (엑셀 기반)", page_icon="🩺", layout="centered")
 st.title("🩺 간호사 교육 챗봇")
-st.caption("데이터 소스: Excel 파일 (DB 없이 동작)")
 
 # 데이터 로드
 try:
     data_dict, sheet_names, all_problems = load_quiz_data()
-    st.caption(f"데이터 시트: {', '.join(sheet_names)}")
 except Exception as e:
     st.error(f"데이터 로드 실패: {type(e).__name__}: {str(e)[:200]}")
     st.stop()
@@ -234,7 +232,7 @@ user_answer = st.text_area(
     "여기에 답변을 입력하세요",
     height=160,
     placeholder="예) 불편을 드려 죄송합니다. 시설팀 점검을 요청하고, 예상 소요시간을 안내드리겠습니다...",
-    key=f"user_answer_{current_pid}"   # ✅ 문제 ID 기반으로 key 변경
+    key=f"user_answer_{current_pid}"   # 문제 ID 기반으로 key 변경
 )
 
 # ---------------- 채점하기 ----------------
