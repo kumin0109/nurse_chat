@@ -194,7 +194,7 @@ if "last_feedback" not in st.session_state:
     st.session_state.last_feedback = ""
 if "last_problem" not in st.session_state:
     st.session_state.last_problem = None
-if "user_answer" not in st.session_state:   # ✅ 최초 1회만 초기화
+if "user_answer" not in st.session_state:
     st.session_state["user_answer"] = ""
 
 # 카테고리 선택: 전체, 병동분만실
@@ -253,7 +253,6 @@ if st.session_state.last_feedback:
 # 추가 버튼들
 col1, col2 = st.columns(2)
 with col1:
-    # ✅ 처음에는 '▶️ 시작하기', 이후에는 '➡️ 다음 문제'
     main_btn_label = "▶️ 시작하기" if st.session_state.last_problem is None else "➡️ 다음 문제"
     if st.button(main_btn_label, use_container_width=True):
         prob = get_random_problem(all_problems, st.session_state.category)
@@ -261,11 +260,13 @@ with col1:
             st.session_state.problem_id = prob["id"]
             st.session_state.last_problem = prob
             st.session_state.last_feedback = ""
-            st.session_state["user_answer"] = ""   # 안전하게 리셋
+            st.session_state.update({"user_answer": ""})
+            st.rerun()
 with col2:
     if st.button("🔄 카테고리 변경", use_container_width=True):
         st.session_state.category = "전체"
         st.session_state.problem_id = None
         st.session_state.last_problem = None
         st.session_state.last_feedback = ""
-        st.session_state["user_answer"] = ""
+        st.session_state.update({"user_answer": ""})
+        st.rerun()
