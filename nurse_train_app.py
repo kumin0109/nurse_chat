@@ -180,7 +180,7 @@ def generate_evaluation(prompt: str) -> str:
         return "죄송합니다. 채점 중 오류가 발생했습니다."
 
 # ==================== Streamlit UI ====================
-st.set_page_config(page_title="간호사 교육 챗봇 (엑셀 기반)", page_icon="🩺", layout="centered")
+st.set_page_config(page_title="간호사 교육 챗봇", page_icon="🩺", layout="centered")
 st.title("🩺 간호사 교육 챗봇")
 
 # 데이터 로드
@@ -291,6 +291,7 @@ if st.session_state.last_problem:   # 문제를 시작한 이후에만 표시
             st.session_state.last_problem = None
             st.session_state.last_feedback = ""
             st.rerun()
+
 
 
 
