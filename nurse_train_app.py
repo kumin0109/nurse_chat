@@ -16,7 +16,7 @@ EXCEL_PATH = os.getenv("EXCEL_PATH", "")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ==================== 전역 설정 ====================
-TARGET_SHEETS = ["병동분만실", "병동별 고객 응대"]
+TARGET_SHEETS = ["병동분만실", "불편사항 대처"]   # ✅ 수정: 병동별 고객 응대 → 불편사항 대처
 
 # ==================== 임베딩 캐시 ====================
 def _emb_cache_path() -> str:
@@ -95,6 +95,7 @@ def load_quiz_data() -> Tuple[Dict[str, pd.DataFrame], List[str], List[Dict[str,
             question = _pick(row, ["질문", "질의", "문제"], default="")
             standard_answer = _pick(row, ["모범답안", "모범답변", "표준답변"], default="")
             eval_item = _pick(row, ["평가항목", "평가 항목"], default="")   # ✅ 평가항목 추가
+            ward = _pick(row, ["병동", "부서", "부서명"], default="")       # 병동/부서명(불편사항 대처용)
             all_problems.append({
                 "id": pid,
                 "sheet": sheet,
@@ -102,6 +103,7 @@ def load_quiz_data() -> Tuple[Dict[str, pd.DataFrame], List[str], List[Dict[str,
                 "question": question,
                 "standard_answer": standard_answer,
                 "eval_item": eval_item,   # ✅ 저장
+                "ward": ward,
                 "embedding": None,
             })
     return data_dict, xls.sheet_names, all_problems
@@ -219,10 +221,18 @@ st.divider()
 st.subheader("문제")
 if st.session_state.last_problem:
     p = st.session_state.last_problem
-    st.markdown(f"**📍 부서:** {p['sheet']}")
-    st.markdown(f"**📑 평가항목:** {p['eval_item'] or '-'}")   # ✅ 컬럼 값 표시
-    st.markdown(f"**📋 상황:** {p['situation'] or '-'}")
-    st.markdown(f"**❓ 질문:** {p['question'] or '-'}")
+    # ✅ 불편사항 대처 특별 포맷
+    if st.session_state.category == "전체" and p['sheet'] == "불편사항 대처":
+        st.markdown("🔔 **불편사항 대처**")
+        st.markdown(f"**📍 병동:** {p.get('ward', '-')}")
+        st.markdown(f"**📋 상황:** {p['situation'] or '-'}")
+        st.markdown(f"**❓ 질문:** {p['question'] or '-'}")
+        st.markdown(f"**🧭 평가항목:** {p['eval_item'] or '-'}")
+    else:
+        st.markdown(f"**📍 부서:** {p['sheet']}")
+        st.markdown(f"**📑 평가항목:** {p['eval_item'] or '-'}")
+        st.markdown(f"**📋 상황:** {p['situation'] or '-'}")
+        st.markdown(f"**❓ 질문:** {p['question'] or '-'}")
 else:
     st.info("먼저 **‘▶️ 시작하기’** 버튼을 눌러 시작하세요.")
 
