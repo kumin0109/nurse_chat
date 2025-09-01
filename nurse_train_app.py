@@ -16,7 +16,7 @@ EXCEL_PATH = os.getenv("EXCEL_PATH", "")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ==================== 전역 설정 ====================
-TARGET_SHEETS = ["병동분만실", "불편사항 대처"]   # ✅ 수정: 병동별 고객 응대 → 불편사항 대처
+TARGET_SHEETS = ["병동분만실", "불편사항 대처"]   # ✅ 수정
 
 # ==================== 임베딩 캐시 ====================
 def _emb_cache_path() -> str:
@@ -89,20 +89,23 @@ def load_quiz_data() -> Tuple[Dict[str, pd.DataFrame], List[str], List[Dict[str,
 
     all_problems: List[Dict[str, Any]] = []
     for sheet, df in data_dict.items():
+        # ✅ 시트명 정규화
+        sheet_normalized = "불편사항 대처" if sheet == "병동별 고객 응대" else sheet
+
         for idx, row in df.iterrows():
-            pid = f"{sheet}_{idx}"
+            pid = f"{sheet_normalized}_{idx}"
             situation = _pick(row, ["상황", "상황 설명", "상황내용"], default="")
             question = _pick(row, ["질문", "질의", "문제"], default="")
             standard_answer = _pick(row, ["모범답안", "모범답변", "표준답변"], default="")
-            eval_item = _pick(row, ["평가항목", "평가 항목"], default="")   # ✅ 평가항목 추가
-            ward = _pick(row, ["병동", "부서", "부서명"], default="")       # 병동/부서명(불편사항 대처용)
+            eval_item = _pick(row, ["평가항목", "평가 항목"], default="")
+            ward = _pick(row, ["병동", "부서", "부서명"], default="")  # 불편사항 대처용
             all_problems.append({
                 "id": pid,
-                "sheet": sheet,
+                "sheet": sheet_normalized,   # ✅ 정규화된 이름 저장
                 "situation": situation,
                 "question": question,
                 "standard_answer": standard_answer,
-                "eval_item": eval_item,   # ✅ 저장
+                "eval_item": eval_item,
                 "ward": ward,
                 "embedding": None,
             })
@@ -288,6 +291,7 @@ if st.session_state.last_problem:   # 문제를 시작한 이후에만 표시
             st.session_state.last_problem = None
             st.session_state.last_feedback = ""
             st.rerun()
+
 
 
 
