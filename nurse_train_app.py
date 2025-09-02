@@ -207,15 +207,12 @@ if st.session_state.problem_index == -1:
 st.divider()
 st.subheader("문제")
 
-# 전체 문제 필터링
-if category == "병동분만실":
-    problems = [p for p in all_problems if p["sheet"] == "병동분만실"]
-else:
-    problems = [p for p in all_problems if p["sheet"] in TARGET_SHEETS]
+# ✅ 항상 병동분만실 문제만 사용 (전체/병동분만실 모두 동일하게 14문제)
+problems = [p for p in all_problems if p["sheet"] == "병동분만실"]
 
 if 0 <= st.session_state.problem_index < len(problems):
     p = problems[st.session_state.problem_index]
-    st.caption(f"진행 상황: {st.session_state.problem_index+1}/{len(problems)}")  # ✅ 진행상황 표시
+    st.caption(f"진행 상황: {st.session_state.problem_index+1}/{len(problems)}")
     st.markdown(f"**📍 부서:** {p['sheet']}")
     st.markdown(f"**📋 상황:** {p['situation'] or '-'}")
     st.markdown(f"**❓ 질문:** {p['question'] or '-'}")
