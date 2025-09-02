@@ -163,7 +163,7 @@ def generate_evaluation(prompt: str) -> str:
             max_tokens=400,
         )
         return result.choices[0].message.content
-    except Exception as e:
+    except Exception:
         return "죄송합니다. 채점 중 오류가 발생했습니다."
 
 # ==================== Streamlit UI ====================
@@ -176,11 +176,28 @@ except Exception as e:
     st.error(f"데이터 로드 실패: {type(e).__name__}: {str(e)[:200]}")
     st.stop()
 
-# 세션 상태 초기화
+# ---------------- 세션 상태 ----------------
+if "category" not in st.session_state:
+    st.session_state.category = "전체"
 if "problem_index" not in st.session_state:
-    st.session_state.problem_index = -1   # 아직 시작 전
+    st.session_state.problem_index = -1
 if "last_feedback" not in st.session_state:
     st.session_state.last_feedback = ""
+
+# ---------------- 카테고리 선택 ----------------
+allowed = ["전체", "병동분만실"]
+st.subheader("카테고리 선택")
+try:
+    category = st.segmented_control("문제를 풀 카테고리", options=allowed, default=st.session_state.category)
+except Exception:
+    category = st.radio("문제를 풀 카테고리", options=allowed, index=0)
+st.session_state.category = category
+
+# 카테고리별 문제 필터링
+if category == "병동분만실":
+    problems_for_session = [p for p in all_problems if p["sheet"] == "병동분만실"]
+else:
+    problems_for_session = [p for p in all_problems if p["sheet"] in TARGET_SHEETS]
 
 # ---------------- 시작하기 ----------------
 if st.session_state.problem_index == -1:
@@ -190,12 +207,12 @@ if st.session_state.problem_index == -1:
         st.rerun()
 
 # ---------------- 모든 문제 다 풀었을 때 ----------------
-elif st.session_state.problem_index >= len(all_problems):
+elif st.session_state.problem_index >= len(problems_for_session):
     st.success("🎉 모든 문제를 다 푸셨습니다. 수고하셨습니다!")
 
 # ---------------- 문제 진행 중 ----------------
 else:
-    p = all_problems[st.session_state.problem_index]
+    p = problems_for_session[st.session_state.problem_index]
 
     st.subheader("문제")
     if p['sheet'] == "불편사항 대처":
@@ -215,7 +232,7 @@ else:
         "여기에 답변을 입력하세요",
         height=160,
         placeholder="예) 불편을 드려 죄송합니다...",
-        key=f"user_answer_{st.session_state.problem_index}"
+        key=f"user_answer_{st.session_state.problem_index}_{category}"
     )
 
     if st.button("✅ 채점하기", type="primary"):
@@ -258,3 +275,5 @@ else:
             st.session_state.problem_index = -1
             st.session_state.last_feedback = ""
             st.rerun()
+
+
