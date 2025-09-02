@@ -1,7 +1,6 @@
 import os
 import json
 import hashlib
-import random
 from typing import Dict, Any, List, Tuple
 
 import numpy as np
@@ -23,10 +22,9 @@ def _emb_cache_path() -> str:
     return "/tmp/_emb_cache.json"
 
 def _load_emb_cache() -> Dict[str, List[float]]:
-    path = _emb_cache_path()
-    if os.path.exists(path):
+    if os.path.exists(_emb_cache_path()):
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(_emb_cache_path(), "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             return {}
@@ -77,26 +75,22 @@ def _pick(row: pd.Series, candidates: List[str], default: str = "") -> str:
     return default
 
 @st.cache_data(show_spinner=True)
-def load_quiz_data() -> Tuple[Dict[str, pd.DataFrame], List[str], List[Dict[str, Any]]]:
+def load_quiz_data() -> List[Dict[str, Any]]:
     REAL_EXCEL = "nursing_data.xlsx"
     xls = pd.ExcelFile(REAL_EXCEL, engine="openpyxl")
-    data_dict: Dict[str, pd.DataFrame] = {}
 
+    all_problems: List[Dict[str, Any]] = []
     for sheet in xls.sheet_names:
         df = pd.read_excel(REAL_EXCEL, sheet_name=sheet, engine="openpyxl")
         df.columns = [str(c).strip() for c in df.columns]
-        data_dict[sheet] = df
-
-    all_problems: List[Dict[str, Any]] = []
-    for sheet, df in data_dict.items():
         sheet_normalized = "불편사항 대처" if sheet == "병동별 고객 응대" else sheet
         for idx, row in df.iterrows():
             pid = f"{sheet_normalized}_{idx}"
-            situation = _pick(row, ["상황", "상황 설명", "상황내용"], default="")
-            question = _pick(row, ["질문", "질의", "문제"], default="")
-            standard_answer = _pick(row, ["모범답안", "모범답변", "표준답변"], default="")
-            eval_item = _pick(row, ["평가항목", "평가 항목"], default="")
-            ward = _pick(row, ["병동", "부서", "부서명"], default="")
+            situation = _pick(row, ["상황", "상황 설명", "상황내용"], "")
+            question = _pick(row, ["질문", "질의", "문제"], "")
+            standard_answer = _pick(row, ["모범답안", "모범답변", "표준답변"], "")
+            eval_item = _pick(row, ["평가항목", "평가 항목"], "")
+            ward = _pick(row, ["병동", "부서", "부서명"], "")
             all_problems.append({
                 "id": pid,
                 "sheet": sheet_normalized,
@@ -107,23 +101,12 @@ def load_quiz_data() -> Tuple[Dict[str, pd.DataFrame], List[str], List[Dict[str,
                 "ward": ward,
                 "embedding": None,
             })
-    return data_dict, xls.sheet_names, all_problems
+    return all_problems
 
 def _ensure_problem_embedding(problem: Dict[str, Any]) -> List[float]:
     if problem.get("embedding") is None:
         problem["embedding"] = safe_get_embedding(problem["standard_answer"])
     return problem["embedding"]
-
-# ==================== 문제 추출 ====================
-def get_random_problem(all_problems: List[Dict[str, Any]], category: str | None = None) -> Dict[str, Any] | None:
-    try:
-        if category == "병동분만실":
-            filtered = [p for p in all_problems if p["sheet"] == "병동분만실"]
-        else:
-            filtered = [p for p in all_problems if p["sheet"] in TARGET_SHEETS]
-        return random.choice(filtered) if filtered else None
-    except Exception:
-        return None
 
 # ==================== GPT 평가 프롬프트 ====================
 def create_evaluation_prompt(user_answer: str, problem: Dict[str, Any], similarity: float) -> str:
@@ -181,7 +164,6 @@ def generate_evaluation(prompt: str) -> str:
         )
         return result.choices[0].message.content
     except Exception as e:
-        print(f"GPT 오류: {e}")
         return "죄송합니다. 채점 중 오류가 발생했습니다."
 
 # ==================== Streamlit UI ====================
@@ -189,42 +171,34 @@ st.set_page_config(page_title="간호사 교육 챗봇", page_icon="🩺", layou
 st.title("🩺 간호사 교육 챗봇")
 
 try:
-    data_dict, sheet_names, all_problems = load_quiz_data()
+    all_problems = load_quiz_data()
 except Exception as e:
     st.error(f"데이터 로드 실패: {type(e).__name__}: {str(e)[:200]}")
     st.stop()
 
-if "category" not in st.session_state:
-    st.session_state.category = "전체"
-if "problem_id" not in st.session_state:
-    st.session_state.problem_id = None
+# 세션 상태 초기화
+if "problem_index" not in st.session_state:
+    st.session_state.problem_index = -1   # 아직 시작 전
 if "last_feedback" not in st.session_state:
     st.session_state.last_feedback = ""
-if "last_problem" not in st.session_state:
-    st.session_state.last_problem = None
 
-allowed = ["전체", "병동분만실"]
-st.subheader("카테고리 선택")
-try:
-    category = st.segmented_control("문제를 풀 카테고리", options=allowed, default=allowed[0])
-except Exception:
-    category = st.radio("문제를 풀 카테고리", options=allowed, index=0)
-st.session_state.category = category
-
-if st.session_state.last_problem is None:
+# ---------------- 시작하기 ----------------
+if st.session_state.problem_index == -1:
     if st.button("▶️ 시작하기", use_container_width=True):
-        prob = get_random_problem(all_problems, st.session_state.category)
-        if prob:
-            st.session_state.problem_id = prob["id"]
-            st.session_state.last_problem = prob
-            st.session_state.last_feedback = ""
-            st.rerun()
+        st.session_state.problem_index = 0
+        st.session_state.last_feedback = ""
+        st.rerun()
 
-st.divider()
-st.subheader("문제")
-if st.session_state.last_problem:
-    p = st.session_state.last_problem
-    if st.session_state.category == "전체" and p['sheet'] == "불편사항 대처":
+# ---------------- 모든 문제 다 풀었을 때 ----------------
+elif st.session_state.problem_index >= len(all_problems):
+    st.success("🎉 모든 문제를 다 푸셨습니다. 수고하셨습니다!")
+
+# ---------------- 문제 진행 중 ----------------
+else:
+    p = all_problems[st.session_state.problem_index]
+
+    st.subheader("문제")
+    if p['sheet'] == "불편사항 대처":
         st.markdown("🔔 **불편사항 대처**")
         st.markdown(f"**📍 병동:** {p.get('ward', '-')}")
         st.markdown(f"**📋 상황:** {p['situation'] or '-'}")
@@ -235,65 +209,52 @@ if st.session_state.last_problem:
         st.markdown(f"**📑 평가항목:** {p['eval_item'] or '-'}")
         st.markdown(f"**📋 상황:** {p['situation'] or '-'}")
         st.markdown(f"**❓ 질문:** {p['question'] or '-'}")
-else:
-    st.info("먼저 **‘▶️ 시작하기’** 버튼을 눌러 시작하세요.")
 
-st.subheader("나의 답변")
-current_pid = st.session_state.last_problem["id"] if st.session_state.last_problem else "none"
+    st.subheader("나의 답변")
+    user_answer = st.text_area(
+        "여기에 답변을 입력하세요",
+        height=160,
+        placeholder="예) 불편을 드려 죄송합니다...",
+        key=f"user_answer_{st.session_state.problem_index}"
+    )
 
-user_answer = st.text_area(
-    "여기에 답변을 입력하세요",
-    height=160,
-    placeholder="예) 불편을 드려 죄송합니다. 시설팀 점검을 요청하고, 예상 소요시간을 안내드리겠습니다...",
-    key=f"user_answer_{current_pid}"
-)
-
-# ✅ 채점 로직 (표준답안 == 입력 → 무조건 100점)
-if st.button("✅ 채점하기", type="primary"):
-    if not st.session_state.last_problem:
-        st.warning("먼저 문제를 받아주세요.")
-    elif not user_answer.strip():
-        st.warning("답변을 입력해 주세요.")
-    else:
-        std_ans = st.session_state.last_problem["standard_answer"].strip()
-        if user_answer.strip() == std_ans:
-            st.session_state.last_feedback = (
-                "피드백: 모범답안을 정확히 입력했습니다. 아주 훌륭합니다! ✅\n\n"
-                "장점:\n- 표준답안과 완벽히 일치\n\n"
-                "단점:\n- 특별한 단점 없음\n\n"
-                "점수: 100\n\n"
-                "개선 답변:\n- 환자에게 더 친절한 어투와 공감 표현을 추가하면 더욱 좋습니다."
-            )
+    if st.button("✅ 채점하기", type="primary"):
+        if not user_answer.strip():
+            st.warning("답변을 입력해 주세요.")
         else:
-            try:
-                user_emb = safe_get_embedding(user_answer)
-                std_emb = _ensure_problem_embedding(st.session_state.last_problem)
-                similarity = cos_sim(np.array(user_emb), np.array(std_emb))
-                prompt = create_evaluation_prompt(user_answer, st.session_state.last_problem, similarity)
-                feedback = generate_evaluation(prompt)
-                st.session_state.last_feedback = feedback
-                st.success("채점 완료!")
-            except Exception as e:
-                st.error(f"채점 오류: {type(e).__name__}: {str(e)[:200]}")
+            std_ans = p["standard_answer"].strip()
+            if user_answer.strip() == std_ans:
+                st.session_state.last_feedback = (
+                    "피드백: 모범답안을 정확히 입력했습니다. 아주 훌륭합니다! ✅\n\n"
+                    "장점:\n- 표준답안과 완벽히 일치\n\n"
+                    "단점:\n- 특별한 단점 없음\n\n"
+                    "점수: 100\n\n"
+                    "개선 답변:\n- 환자에게 더 친절한 어투와 공감 표현을 추가하면 더욱 좋습니다."
+                )
+            else:
+                try:
+                    user_emb = safe_get_embedding(user_answer)
+                    std_emb = _ensure_problem_embedding(p)
+                    similarity = cos_sim(np.array(user_emb), np.array(std_emb))
+                    prompt = create_evaluation_prompt(user_answer, p, similarity)
+                    feedback = generate_evaluation(prompt)
+                    st.session_state.last_feedback = feedback
+                    st.success("채점 완료!")
+                except Exception as e:
+                    st.error(f"채점 오류: {type(e).__name__}: {str(e)[:200]}")
 
-if st.session_state.last_feedback:
-    st.subheader("📊 채점 결과")
-    st.markdown(st.session_state.last_feedback)
+    if st.session_state.last_feedback:
+        st.subheader("📊 채점 결과")
+        st.markdown(st.session_state.last_feedback)
 
-if st.session_state.last_problem:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("➡️ 다음 문제", use_container_width=True):
-            prob = get_random_problem(all_problems, st.session_state.category)
-            if prob:
-                st.session_state.problem_id = prob["id"]
-                st.session_state.last_problem = prob
-                st.session_state.last_feedback = ""
-                st.rerun()
+            st.session_state.problem_index += 1
+            st.session_state.last_feedback = ""
+            st.rerun()
     with col2:
-        if st.button("🔄 카테고리 변경", use_container_width=True):
-            st.session_state.category = "전체"
-            st.session_state.problem_id = None
-            st.session_state.last_problem = None
+        if st.button("🔄 처음으로", use_container_width=True):
+            st.session_state.problem_index = -1
             st.session_state.last_feedback = ""
             st.rerun()
