@@ -133,7 +133,7 @@ def create_evaluation_prompt(user_answer: str, problem: Dict[str, Any], similari
 - 애매하면 중간 점수 대신 극단적으로 점수를 줘라.
 
 개선 답변:
-- 100점일 경우: 추가적인 보완점만 제시 (예: 공감 표현, 친절한 어투, 구체적 안내)
+- 100점일 경우: 추가적인 보완점만 제시
 - 100점이 아닐 경우: 부족한 점을 보완한 예시 답변 제시
 
 [상황]
