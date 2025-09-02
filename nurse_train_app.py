@@ -141,13 +141,16 @@ def create_evaluation_prompt(user_answer: str, problem: Dict[str, Any], similari
 
 점수:
 - 0~100점 사이 정수 1개
-- 점수는 반드시 극단적으로 주어라.
-  - 학생 답변이 표준답변과 거의 일치하면 90~100점
+- 학생 답변이 표준답변과 동일하거나 거의 일치하면 반드시 100점을 줘라.
+- 이 경우 개선 답변은 '추가적으로 더 잘할 수 있는 보완점'만 제시하라.
+- 그 외에는 극단적으로 점수를 주어라:
   - 중요한 핵심이 빠지면 0~30점
-  - 애매한 경우에도 50점은 피하고, 반드시 낮거나 높게 판정하라
+  - 거의 맞으면 90점 이상
+  - 애매한 경우 50점대는 피하라
 
 개선 답변:
-- 학생 답변을 간단히 보완한 예시 (짧게)
+- 100점일 경우: 추가적인 보완점만 제시 (예: 공감 표현, 친절한 어투, 구체적 안내)
+- 100점이 아닐 경우: 부족한 점을 보완한 예시 답변 제시
 
 [상황]
 {problem['situation']}
@@ -245,22 +248,33 @@ user_answer = st.text_area(
     key=f"user_answer_{current_pid}"
 )
 
+# ✅ 채점 로직 (표준답안 == 입력 → 무조건 100점)
 if st.button("✅ 채점하기", type="primary"):
     if not st.session_state.last_problem:
         st.warning("먼저 문제를 받아주세요.")
     elif not user_answer.strip():
         st.warning("답변을 입력해 주세요.")
     else:
-        try:
-            user_emb = safe_get_embedding(user_answer)
-            std_emb = _ensure_problem_embedding(st.session_state.last_problem)
-            similarity = cos_sim(np.array(user_emb), np.array(std_emb))
-            prompt = create_evaluation_prompt(user_answer, st.session_state.last_problem, similarity)
-            feedback = generate_evaluation(prompt)
-            st.session_state.last_feedback = feedback
-            st.success("채점 완료!")
-        except Exception as e:
-            st.error(f"채점 오류: {type(e).__name__}: {str(e)[:200]}")
+        std_ans = st.session_state.last_problem["standard_answer"].strip()
+        if user_answer.strip() == std_ans:
+            st.session_state.last_feedback = (
+                "피드백: 모범답안을 정확히 입력했습니다. 아주 훌륭합니다! ✅\n\n"
+                "장점:\n- 표준답안과 완벽히 일치\n\n"
+                "단점:\n- 특별한 단점 없음\n\n"
+                "점수: 100\n\n"
+                "개선 답변:\n- 환자에게 더 친절한 어투와 공감 표현을 추가하면 더욱 좋습니다."
+            )
+        else:
+            try:
+                user_emb = safe_get_embedding(user_answer)
+                std_emb = _ensure_problem_embedding(st.session_state.last_problem)
+                similarity = cos_sim(np.array(user_emb), np.array(std_emb))
+                prompt = create_evaluation_prompt(user_answer, st.session_state.last_problem, similarity)
+                feedback = generate_evaluation(prompt)
+                st.session_state.last_feedback = feedback
+                st.success("채점 완료!")
+            except Exception as e:
+                st.error(f"채점 오류: {type(e).__name__}: {str(e)[:200]}")
 
 if st.session_state.last_feedback:
     st.subheader("📊 채점 결과")
