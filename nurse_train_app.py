@@ -16,7 +16,7 @@ EXCEL_PATH = os.getenv("EXCEL_PATH", "")
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ==================== 전역 설정 ====================
-TARGET_SHEETS = ["병동분만실", "불편사항 대처"]   # ✅ 수정
+TARGET_SHEETS = ["병동분만실", "불편사항 대처"]
 
 # ==================== 임베딩 캐시 ====================
 def _emb_cache_path() -> str:
@@ -89,19 +89,17 @@ def load_quiz_data() -> Tuple[Dict[str, pd.DataFrame], List[str], List[Dict[str,
 
     all_problems: List[Dict[str, Any]] = []
     for sheet, df in data_dict.items():
-        # ✅ 시트명 정규화
         sheet_normalized = "불편사항 대처" if sheet == "병동별 고객 응대" else sheet
-
         for idx, row in df.iterrows():
             pid = f"{sheet_normalized}_{idx}"
             situation = _pick(row, ["상황", "상황 설명", "상황내용"], default="")
             question = _pick(row, ["질문", "질의", "문제"], default="")
             standard_answer = _pick(row, ["모범답안", "모범답변", "표준답변"], default="")
             eval_item = _pick(row, ["평가항목", "평가 항목"], default="")
-            ward = _pick(row, ["병동", "부서", "부서명"], default="")  # 불편사항 대처용
+            ward = _pick(row, ["병동", "부서", "부서명"], default="")
             all_problems.append({
                 "id": pid,
-                "sheet": sheet_normalized,   # ✅ 정규화된 이름 저장
+                "sheet": sheet_normalized,
                 "situation": situation,
                 "question": question,
                 "standard_answer": standard_answer,
@@ -121,7 +119,7 @@ def get_random_problem(all_problems: List[Dict[str, Any]], category: str | None 
     try:
         if category == "병동분만실":
             filtered = [p for p in all_problems if p["sheet"] == "병동분만실"]
-        else:  # 전체
+        else:
             filtered = [p for p in all_problems if p["sheet"] in TARGET_SHEETS]
         return random.choice(filtered) if filtered else None
     except Exception:
@@ -143,6 +141,10 @@ def create_evaluation_prompt(user_answer: str, problem: Dict[str, Any], similari
 
 점수:
 - 0~100점 사이 정수 1개
+- 점수는 반드시 극단적으로 주어라.
+  - 학생 답변이 표준답변과 거의 일치하면 90~100점
+  - 중요한 핵심이 빠지면 0~30점
+  - 애매한 경우에도 50점은 피하고, 반드시 낮거나 높게 판정하라
 
 개선 답변:
 - 학생 답변을 간단히 보완한 예시 (짧게)
@@ -183,14 +185,12 @@ def generate_evaluation(prompt: str) -> str:
 st.set_page_config(page_title="간호사 교육 챗봇", page_icon="🩺", layout="centered")
 st.title("🩺 간호사 교육 챗봇")
 
-# 데이터 로드
 try:
     data_dict, sheet_names, all_problems = load_quiz_data()
 except Exception as e:
     st.error(f"데이터 로드 실패: {type(e).__name__}: {str(e)[:200]}")
     st.stop()
 
-# 세션 상태 초기화
 if "category" not in st.session_state:
     st.session_state.category = "전체"
 if "problem_id" not in st.session_state:
@@ -200,7 +200,6 @@ if "last_feedback" not in st.session_state:
 if "last_problem" not in st.session_state:
     st.session_state.last_problem = None
 
-# ---------------- 카테고리 선택 ----------------
 allowed = ["전체", "병동분만실"]
 st.subheader("카테고리 선택")
 try:
@@ -209,7 +208,6 @@ except Exception:
     category = st.radio("문제를 풀 카테고리", options=allowed, index=0)
 st.session_state.category = category
 
-# ▶️ 시작하기 버튼 (카테고리 선택 밑)
 if st.session_state.last_problem is None:
     if st.button("▶️ 시작하기", use_container_width=True):
         prob = get_random_problem(all_problems, st.session_state.category)
@@ -219,12 +217,10 @@ if st.session_state.last_problem is None:
             st.session_state.last_feedback = ""
             st.rerun()
 
-# ---------------- 문제 표시 ----------------
 st.divider()
 st.subheader("문제")
 if st.session_state.last_problem:
     p = st.session_state.last_problem
-    # ✅ 불편사항 대처 특별 포맷
     if st.session_state.category == "전체" and p['sheet'] == "불편사항 대처":
         st.markdown("🔔 **불편사항 대처**")
         st.markdown(f"**📍 병동:** {p.get('ward', '-')}")
@@ -239,7 +235,6 @@ if st.session_state.last_problem:
 else:
     st.info("먼저 **‘▶️ 시작하기’** 버튼을 눌러 시작하세요.")
 
-# ---------------- 답안 입력 ----------------
 st.subheader("나의 답변")
 current_pid = st.session_state.last_problem["id"] if st.session_state.last_problem else "none"
 
@@ -247,10 +242,9 @@ user_answer = st.text_area(
     "여기에 답변을 입력하세요",
     height=160,
     placeholder="예) 불편을 드려 죄송합니다. 시설팀 점검을 요청하고, 예상 소요시간을 안내드리겠습니다...",
-    key=f"user_answer_{current_pid}"   # 문제 ID 기반 key
+    key=f"user_answer_{current_pid}"
 )
 
-# ---------------- 채점하기 ----------------
 if st.button("✅ 채점하기", type="primary"):
     if not st.session_state.last_problem:
         st.warning("먼저 문제를 받아주세요.")
@@ -268,13 +262,11 @@ if st.button("✅ 채점하기", type="primary"):
         except Exception as e:
             st.error(f"채점 오류: {type(e).__name__}: {str(e)[:200]}")
 
-# ---------------- 결과 표시 ----------------
 if st.session_state.last_feedback:
     st.subheader("📊 채점 결과")
     st.markdown(st.session_state.last_feedback)
 
-# ---------------- 다음 문제 / 카테고리 변경 ----------------
-if st.session_state.last_problem:   # 문제를 시작한 이후에만 표시
+if st.session_state.last_problem:
     col1, col2 = st.columns(2)
     with col1:
         if st.button("➡️ 다음 문제", use_container_width=True):
@@ -291,8 +283,3 @@ if st.session_state.last_problem:   # 문제를 시작한 이후에만 표시
             st.session_state.last_problem = None
             st.session_state.last_feedback = ""
             st.rerun()
-
-
-
-
-
