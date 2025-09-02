@@ -75,8 +75,9 @@ def _pick(row: pd.Series, candidates: List[str], default: str = "") -> str:
                 return str(val).strip()
     return default
 
+# ⬇️⬇️ 여기만 캐시 키에 파일 수정시간을 추가했습니다.
 @st.cache_data(show_spinner=True)
-def load_quiz_data() -> Tuple[Dict[str, pd.DataFrame], List[str], List[Dict[str, Any]]]:
+def load_quiz_data(file_sig: float) -> Tuple[Dict[str, pd.DataFrame], List[str], List[Dict[str, Any]]]:
     REAL_EXCEL = "nursing_data.xlsx"
     xls = pd.ExcelFile(REAL_EXCEL, engine="openpyxl")
     data_dict: Dict[str, pd.DataFrame] = {}
@@ -133,7 +134,7 @@ def create_evaluation_prompt(user_answer: str, problem: Dict[str, Any], similari
 - 애매하면 중간 점수 대신 극단적으로 점수를 줘라.
 
 개선 답변:
-- 100점일 경우: 추가적인 보완점만 제시
+- 100점일 경우: 추가적인 보완점만 제시 (예: 공감 표현, 친절한 어투, 구체적 안내)
 - 100점이 아닐 경우: 부족한 점을 보완한 예시 답변 제시
 
 [상황]
@@ -172,9 +173,10 @@ def generate_evaluation(prompt: str) -> str:
 st.set_page_config(page_title="간호사 교육 챗봇", page_icon="🩺", layout="centered")
 st.title("🩺 간호사 교육 챗봇")
 
-# 데이터 로드
+# 데이터 로드 (파일 수정시간을 캐시 키로 전달)
 try:
-    data_dict, sheet_names, all_problems = load_quiz_data()
+    file_sig = os.path.getmtime("nursing_data.xlsx")
+    data_dict, sheet_names, all_problems = load_quiz_data(file_sig)
 except Exception as e:
     st.error(f"데이터 로드 실패: {type(e).__name__}: {str(e)[:200]}")
     st.stop()
@@ -207,7 +209,7 @@ if st.session_state.problem_index == -1:
 st.divider()
 st.subheader("문제")
 
-# ✅ 항상 병동분만실 문제만 사용 (전체/병동분만실 모두 동일하게 14문제)
+# ✅ 현재 파일 구조(병동분만실만 존재)에 맞춰 항상 병동분만실 문제만 사용
 problems = [p for p in all_problems if p["sheet"] == "병동분만실"]
 
 if 0 <= st.session_state.problem_index < len(problems):
@@ -278,3 +280,5 @@ if 0 <= st.session_state.problem_index < len(problems):
             st.session_state.problem_index = -1
             st.session_state.last_feedback = ""
             st.rerun()
+
+
